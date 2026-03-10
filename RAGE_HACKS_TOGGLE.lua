@@ -1,5 +1,5 @@
 --// ================================
---//  FAKE HACK PANEL (CLIENT ONLY)
+--//  REAL HACK PANEL (CLIENT ONLY)
 --//  PC + MOBILE COMPATIBLE
 --//  Works everywhere (no PlaceId lock)
 --// ================================
@@ -26,7 +26,7 @@ panel.Draggable = true
 -- TITLE
 local title = Instance.new("TextLabel", panel)
 title.Size = UDim2.new(1, 0, 0, 35)
-title.Text = "⚡ Fake Hack Menu"
+title.Text = "⚡ Hack Menu"
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 20
 title.TextColor3 = Color3.fromRGB(255,255,255)
@@ -44,6 +44,11 @@ local hacks = {
     Fly = false
 }
 
+-- FLIGHT VARIABLES
+local flying = false
+local flightSpeed = 50
+local flyConnection = nil
+
 -- BUTTON CREATOR
 local function createButton(text, posY, toggleKey)
     local btn = Instance.new("TextButton", panel)
@@ -58,6 +63,15 @@ local function createButton(text, posY, toggleKey)
     btn.MouseButton1Click:Connect(function()
         hacks[toggleKey] = not hacks[toggleKey]
         btn.Text = text .. ": " .. (hacks[toggleKey] and "ON" or "OFF")
+        
+        -- Special handling for Fly
+        if toggleKey == "Fly" then
+            if hacks.Fly then
+                startFlying()
+            else
+                stopFlying()
+            end
+        end
     end)
 end
 
@@ -92,35 +106,193 @@ if UIS.TouchEnabled then
 	panel.Visible = false
 end
 
--- VISUAL EFFECTS LOOP (FAKE ONLY)
+-- ===== REAL IMPLEMENTATIONS =====
+
+-- SILENT AIM: Makes bullets always hit when aimed at target
+local function silentAim()
+    local enemy = findClosestEnemy()
+    if enemy and enemy:FindFirstChild("Humanoid") then
+        return enemy.HumanoidRootPart.Position
+    end
+    return nil
+end
+
+-- AIMBOT: Auto aim at nearest player
+local function aimbot()
+    local closest = findClosestEnemy()
+    if closest and closest:FindFirstChild("HumanoidRootPart") then
+        cam.CFrame = CFrame.new(cam.CFrame.Position, closest.HumanoidRootPart.Position)
+    end
+end
+
+-- FIND CLOSEST ENEMY
+local function findClosestEnemy()
+    local closest = nil
+    local closestDist = math.huge
+    
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local dist = (plr.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                closest = plr.Character
+            end
+        end
+    end
+    
+    return closest
+end
+
+-- ESP: Draw boxes around enemies
+local function drawESP()
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and not hrp:FindFirstChild("ESPBox") then
+                local box = Instance.new("BoxHandleAdornment")
+                box.Name = "ESPBox"
+                box.Adornee = hrp
+                box.Size = hrp.Size * 3
+                box.Color3 = Color3.fromRGB(255, 0, 0)
+                box.Transparency = 0.3
+                box.Parent = hrp
+            end
+        end
+    end
+end
+
+-- RAGE MODE: Red glow + increased visibility
+local function rageMode()
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local hrp = char.HumanoidRootPart
+        
+        if not hrp:FindFirstChild("RageLight") then
+            local light = Instance.new("PointLight")
+            light.Name = "RageLight"
+            light.Color = Color3.fromRGB(255, 0, 0)
+            light.Range = 15
+            light.Brightness = 2
+            light.Parent = hrp
+        end
+    end
+end
+
+-- NO RECOIL: Reduce weapon recoil
+local function noRecoil()
+    local char = player.Character
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part.Name == "Recoil" or part.Name == "Handle" then
+                if part:IsA("BodyVelocity") then
+                    part.Velocity = Vector3.new(0, 0, 0)
+                end
+            end
+        end
+    end
+end
+
+-- INFINITE DAMAGE: Boost damage output
+local function infiniteDamage()
+    local char = player.Character
+    if char then
+        for _, tool in pairs(char:FindFirstChild("Backpack") and char.Backpack:GetChildren() or {}) do
+            if tool:FindFirstChild("Damage") then
+                tool.Damage.Value = math.huge
+            end
+        end
+    end
+end
+
+-- SPEED HACK: Increase movement speed
+local function speedHack()
+    local char = player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.WalkSpeed = 35
+    end
+end
+
+-- FLY: Free flight mode
+local function startFlying()
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    flying = true
+    local hrp = char.HumanoidRootPart
+    
+    -- Create velocity object
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVelocity.Name = "FlyVelocity"
+    bodyVelocity.Parent = hrp
+    
+    if flyConnection then flyConnection:Disconnect() end
+    
+    flyConnection = RS.RenderStepped:Connect(function()
+        if not flying or not char or not hrp.Parent then
+            stopFlying()
+            return
+        end
+        
+        local moveDirection = Vector3.new(0, 0, 0)
+        
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDirection = moveDirection + (cam.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDirection = moveDirection - (cam.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDirection = moveDirection - cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDirection = moveDirection + cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDirection = moveDirection + Vector3.new(0, 1, 0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDirection = moveDirection - Vector3.new(0, 1, 0) end
+        
+        bodyVelocity.Velocity = moveDirection.Unit * flightSpeed
+    end)
+end
+
+local function stopFlying()
+    flying = false
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local bodyVel = char.HumanoidRootPart:FindFirstChild("FlyVelocity")
+        if bodyVel then bodyVel:Destroy() end
+    end
+end
+
+-- MAIN LOOP
 RS.RenderStepped:Connect(function()
     local char = player.Character
     if not char then return end
-
-    -- Fake Rage aura
+    
+    if hacks.Aimbot then
+        aimbot()
+    end
+    
+    if hacks.ESP then
+        drawESP()
+    end
+    
     if hacks.Rage then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local glow = Instance.new("PointLight")
-            glow.Color = Color3.fromRGB(255,0,0)
-            glow.Range = 8
-            glow.Brightness = 2
-            glow.Parent = hrp
-            game.Debris:AddItem(glow, 0.1)
-        end
+        rageMode()
     end
-
-    -- Fake Fly
-    if hacks.Fly then
-        cam.CFrame *= CFrame.new(0, 0.04, 0)
-    end
-
-    -- Fake No Recoil = tiny camera shake
+    
     if hacks.NoRecoil then
-        cam.CFrame *= CFrame.Angles(
-            math.rad(math.random(-1,1)),
-            math.rad(math.random(-1,1)),
-            0
-        )
+        noRecoil()
     end
+    
+    if hacks.InfiniteDamage then
+        infiniteDamage()
+    end
+    
+    if hacks.SpeedHack then
+        speedHack()
+    end
+end)
+
+-- Cleanup on death
+player.CharacterAdded:Connect(function()
+    stopFlying()
 end)
